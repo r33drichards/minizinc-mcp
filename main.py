@@ -57,7 +57,7 @@ async def solve_constraint_core(problem: ConstraintModel) -> "SolveResult":
         if problem.timeout:
             result = await instance.solve_async(
                 all_solutions=problem.all_solutions,
-                timeout=datetime.timedelta(seconds=problem.timeout)
+                time_limit=datetime.timedelta(seconds=problem.timeout)
             )
         else:
             result = await instance.solve_async(all_solutions=problem.all_solutions)
