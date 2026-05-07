@@ -125,6 +125,11 @@
         devShells.default = pkgs.mkShell {
           packages = [ pythonEnv pkgs.minizinc ];
         };
+
+        # NixOS VM integration test (Linux only).
+        checks = pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          integration = import ./nix/test.nix self pkgs;
+        };
       }
     ) // {
       nixosModules.default      = nixosModule;
