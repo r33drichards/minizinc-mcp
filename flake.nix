@@ -8,66 +8,77 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      # NixOS module is system-independent, so we expose it separately.
+      # NixOS module is system-independent.
       nixosModule = import ./nix/module.nix self;
     in
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-
         python = pkgs.python3;
 
-        # The `minizinc` Python package may not be in nixpkgs yet; build from
-        # PyPI so the flake is self-contained.
+        # minizinc Python bindings (not yet in nixpkgs).
         minizinc-python = python.pkgs.buildPythonPackage rec {
-          pname = "minizinc";
-          version = "0.9.0";
-          format = "pyproject";
+          pname   = "minizinc";
+          version = "0.10.0";
+          format  = "pyproject";
 
           src = python.pkgs.fetchPypi {
             inherit pname version;
-            sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            sha256 = "sha256-zh01Ac5FBopc9BmnHlqlB+OmKjCIY4rpaiAOwyn5Cjo=";
           };
 
           nativeBuildInputs = [ python.pkgs.setuptools ];
-          propagatedBuildInputs = [ python.pkgs.pydantic ];
-
-          # MiniZinc binary must be on PATH at runtime; we wire it in via the
-          # wrapper below, so skip the import check here.
+          # No runtime deps beyond the minizinc binary (provided via PATH wrapper).
           doCheck = false;
 
-          meta = {
+          meta = with pkgs.lib; {
             description = "Python bindings for the MiniZinc constraint modelling language";
             homepage    = "https://github.com/MiniZinc/minizinc-python";
-            license     = pkgs.lib.licenses.mpl20;
+            license     = licenses.mpl20;
+          };
+        };
+
+        # MCP SDK (Model Context Protocol).
+        mcp-sdk = python.pkgs.buildPythonPackage rec {
+          pname   = "mcp";
+          version = "1.27.0";
+          format  = "pyproject";
+
+          src = python.pkgs.fetchPypi {
+            inherit pname version;
+            sha256 = "sha256-09w1p+7A1FjB2kl2pI+YIJfdqrh+J4xVEdWkpW6FK4M=";
+          };
+
+          nativeBuildInputs = with python.pkgs; [ hatchling ];
+
+          propagatedBuildInputs = with python.pkgs; [
+            anyio
+            httpx
+            pydantic
+            pydantic-settings
+            starlette
+            uvicorn
+            sse-starlette
+            python-multipart
+            jsonschema
+            typing-extensions
+            # httpx-sse / typing-inspection may not be in nixpkgs yet;
+            # they are optional transitive deps that fastmcp doesn't require at
+            # import time, so we skip them here.
+          ];
+
+          doCheck = false;
+
+          meta = with pkgs.lib; {
+            description = "Model Context Protocol SDK";
+            homepage    = "https://github.com/modelcontextprotocol/python-sdk";
+            license     = licenses.mit;
           };
         };
 
         pythonEnv = python.withPackages (ps: [
           ps.pydantic
-          # `mcp` (Model Context Protocol SDK) — use the nixpkgs package when
-          # available, otherwise fall back to a PyPI build.
-          (ps.mcp or (ps.buildPythonPackage rec {
-            pname = "mcp";
-            version = "1.8.0";
-            format = "pyproject";
-
-            src = ps.fetchPypi {
-              inherit pname version;
-              sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-            };
-
-            nativeBuildInputs = [ ps.hatchling ];
-            propagatedBuildInputs = with ps; [ anyio httpx pydantic starlette uvicorn ];
-
-            doCheck = false;
-
-            meta = {
-              description = "Model Context Protocol SDK";
-              homepage    = "https://github.com/modelcontextprotocol/python-sdk";
-              license     = pkgs.lib.licenses.mit;
-            };
-          }))
+          mcp-sdk
           minizinc-python
         ]);
 
@@ -78,7 +89,7 @@
           src = ./.;
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
-          buildInputs = [ pythonEnv pkgs.minizinc ];
+          buildInputs        = [ pythonEnv pkgs.minizinc ];
 
           dontBuild = true;
 
@@ -112,14 +123,11 @@
         };
 
         devShells.default = pkgs.mkShell {
-          packages = [
-            pythonEnv
-            pkgs.minizinc
-          ];
+          packages = [ pythonEnv pkgs.minizinc ];
         };
       }
     ) // {
-      nixosModules.default = nixosModule;
+      nixosModules.default      = nixosModule;
       nixosModules.minizinc-mcp = nixosModule;
     };
 }
