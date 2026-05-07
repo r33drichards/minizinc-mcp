@@ -127,11 +127,12 @@ async def solve_constraint_core(problem: ConstraintModel) -> "SolveResult":
         )
 
 
-def create_server():
+def create_server(host: str = "0.0.0.0", port: int = 8000):
     mcp = FastMCP(
-        host="0.0.0.0",
         name="MiniZinc Constraint Solver MCP",
-        instructions="Solve constraint satisfaction and optimization problems using MiniZinc"
+        instructions="Solve constraint satisfaction and optimization problems using MiniZinc",
+        host=host,
+        port=port,
     )
 
     @mcp.tool()
@@ -159,10 +160,9 @@ def create_server():
 
     return mcp
 
-app = create_server()
-
 if __name__ == "__main__":
     import os
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "8000"))
-    app.run(transport="sse", host=host, port=port)
+    app = create_server(host=host, port=port)
+    app.run(transport="sse")
